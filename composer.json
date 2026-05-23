@@ -1,0 +1,39 @@
+{
+  "name": "spottersturkey/upload-exif",
+  "description": "Spotters Turkey Upload & EXIF",
+  "type": "flarum-extension",
+  "version": "1.0.0",
+  "keywords": [
+    "flarum",
+    "upload",
+    "exif",
+    "image"
+  ],
+  "license": "MIT",
+  "authors": [
+    {
+      "name": "alikaankaya",
+      "email": "alikaan@ulasiminfo.com",
+      "role": "Spotter & Developer"
+    }
+  ],
+  "require": {
+    "flarum/core": "^2.0",
+    "intervention/image": "^2.7"
+  },
+  "extra": {
+    "flarum-extension": {
+      "title": "Spotters Turkey Upload & EXIF",
+      "icon": {
+        "name": "fas fa-camera",
+        "backgroundColor": "#e74c3c",
+        "color": "#fff"
+      }
+    }
+  },
+  "autoload": {
+    "psr-4": {
+      "SpottersTurkey\\UploadExif\\": "src/"
+    }
+  }
+}
