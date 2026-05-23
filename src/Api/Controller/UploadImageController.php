@@ -7,6 +7,8 @@ use Flarum\Http\RequestUtil;
 use Flarum\Settings\SettingsRepositoryInterface;
 use Flarum\Foundation\Paths;
 use Intervention\Image\ImageManager;
+use Intervention\Image\Drivers\Gd\Driver as GdDriver;
+use Intervention\Image\Drivers\Imagick\Driver as ImagickDriver;
 use Psr\Http\Message\ResponseInterface;
 use Psr\Http\Message\ServerRequestInterface;
 use Psr\Http\Server\RequestHandlerInterface;
@@ -83,33 +85,32 @@ class UploadImageController implements RequestHandlerInterface
         
         copy($localFullPath, $tempBackupPath); // Ham kopyayı al
 
-        $driver = extension_loaded('imagick') ? 'imagick' : 'gd';
-        $manager = new ImageManager(['driver' => $driver]);
+        $manager = new ImageManager(extension_loaded('imagick') ? new ImagickDriver() : new GdDriver());
 
         // --- ORİJİNAL DOSYAYI İŞLE (YEDEK) ---
         // Ayar varsa işle, yoksa ham kalsın.
         if (($origResize && (int)$origResize > 0) || ($origQuality && (int)$origQuality < 100)) {
-            $imgOrigBackup = $manager->make($tempBackupPath);
+            $imgOrigBackup = $manager->read($tempBackupPath);
             if ($origResize) {
-                $imgOrigBackup->resize($origResize, null, function ($c) { $c->aspectRatio(); $c->upsize(); });
+                $imgOrigBackup->scaleDown(width: $origResize);
             }
             $q = $origQuality ? (int)$origQuality : 100;
-            $imgOrigBackup->save($tempBackupPath, $q);
+            $imgOrigBackup->save($tempBackupPath, quality: $q);
             $imgOrigBackup->destroy();
         }
 
         // --- ANA VİTRİN DOSYASINI İŞLE ---
-        $imgOriginal = $manager->make($localFullPath);
+        $imgOriginal = $manager->read($localFullPath);
 
         if ($imgOriginal->width() > $maxWidth) {
-            $imgOriginal->resize($maxWidth, null, function ($c) { $c->aspectRatio(); });
+            $imgOriginal->scaleDown(width: $maxWidth);
         }
 
         // Watermark (Spotters Turkey Standart 9 İmza)
         if ($watermarkId !== 'none') {
             $wmPath = public_path('assets/watermarks/' . $watermarkId . '.png');
             if (file_exists($wmPath)) {
-                $wm = $manager->make($wmPath);
+                $wm = $manager->read($wmPath);
                 $targetWidth = $imgOriginal->width();
                 $targetHeight = $imgOriginal->height();
                 $wmWidth = $wm->width();
@@ -118,37 +119,37 @@ class UploadImageController implements RequestHandlerInterface
                 $wmRatio = $wmWidth / $wmHeight;
 
                 if ($targetRatio > $wmRatio) {
-                    $wm->resize($targetWidth, null, function ($c) { $c->aspectRatio(); });
+                    $wm->scaleDown(width: $targetWidth);
                 } else {
-                    $wm->resize(null, $targetHeight, function ($c) { $c->aspectRatio(); });
+                    $wm->scaleDown(height: $targetHeight);
                 }
 
                 $cropX = intval(($wm->width() - $targetWidth) / 2);
                 $cropY = intval($wm->height() - $targetHeight);
                 $wm->crop($targetWidth, $targetHeight, $cropX, $cropY);
-                $imgOriginal->insert($wm, 'center');
+                $imgOriginal->place($wm, 'center');
             }
         }
 
-        $imgOriginal->save($localFullPath, $quality); 
+        $imgOriginal->save($localFullPath, quality: $quality); 
         $this->transferExifData($tempBackupPath, $localFullPath); // EXIF'i orijinalden aktar
 
         // Thumbnails
         $imgThumb = clone $imgOriginal; 
         if ($imgThumb->width() > $thumbWidth) {
-            $imgThumb->resize($thumbWidth, null, function ($c) { $c->aspectRatio(); });
+            $imgThumb->scaleDown(width: $thumbWidth);
         }
         $thumbName = 'thumb_' . $safeName;
         $localThumbPath = "$this->uploadPath/$thumbName";
-        $imgThumb->save($localThumbPath, 80);
+        $imgThumb->save($localThumbPath, quality: 80);
 
         $imgMini = clone $imgOriginal;
         if ($imgMini->width() > $miniWidth) {
-            $imgMini->resize($miniWidth, null, function ($c) { $c->aspectRatio(); });
+            $imgMini->scaleDown(width: $miniWidth);
         }
         $miniName = 'mini_' . $safeName;
         $localMiniPath = "$this->uploadPath/$miniName";
-        $imgMini->save($localMiniPath, 70);
+        $imgMini->save($localMiniPath, quality: 70);
 
         // --- FIREBASE UPLOAD ---
         try {
